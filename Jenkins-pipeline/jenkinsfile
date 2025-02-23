@@ -1,90 +1,71 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_CREDENTIALS_ID = 'Docker_Jenkins_crd'
+        DOCKER_CREDENTIALS_ID = 'DockerHub_Cred'
         DOCKER_IMAGE_NAME = 'touhidjnu/react-app1'
-        APP_DIRECTORY = '/var/www/app'
-    }
-    
+        APP_DIRECTORY = '/var/www/app/'
+        CONTAINER_NAME = 'touhid-container'
+        }
+
        stages {
         stage('Pull Code') {
             steps {
-                git branch: 'main', credentialsId: 'github_cred', url: 'https://github.com/touhid101/Final-Exam.git'
+                git branch: 'main', credentialsId: 'GitHub_Cred', url: 'https://github.com/touhid101/Final-Exam.git'
             }
         }
-       
+
         stage('Display Files') {
             steps {
                 sh 'ls -la'
             }
         }
-        
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    def buildNumber = currentBuild.number
-                    def currentTime = new Date().format('dd-MM-HH-mm')
-                    def imageTag = "${buildNumber}-${currentTime}"
-
-                    // Build the Docker image
-                    sh "docker build -t ${DOCKER_IMAGE_NAME}:${imageTag} ."
+                    echo 'Building Docker image...'
+                    def timestamp = new Date().format('dd-MM-HH-mm', TimeZone.getTimeZone('BDT'))
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${timestamp}" // Define imageTag as an environment variable
+                    sh "docker build -t ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG} ."
                 }
             }
         }
-        
+
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                    withCredentials([usernamePassword(credentialsId: 'DockerHub_Cred', passwordVariable: 'DHPASSWORD', usernameVariable: 'DHUNAME')]) {
                         // Login to Docker Hub
-                        sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
+                        sh "echo $DHPASSWORD | docker login -u $DHUNAME --password-stdin"
                         // Push the Docker image
-                        sh "docker push ${DOCKER_IMAGE_NAME}:${imageTag}"
+                        sh "docker push $DOCKER_IMAGE_NAME:${env.IMAGE_TAG}"
                         // Logout from Docker Hub
                         sh "docker logout"
                     }
                 }
             }
         }
-        
-        stage('Update docker-compose.yaml') {
+
+        stage('Run Docker Image') {
             steps {
-                // Update the image tag in the docker-compose.yaml file
-                sh "sed -i 's|${DOCKER_IMAGE_NAME}:.*|${DOCKER_IMAGE_NAME}:${imageTag}|g' ${APP_DIRECTORY}/docker-compose.yaml"
+                script {
+                    echo 'Running Docker container...'
+                    sh """
+                       docker run -d --name ${env.CONTAINER_NAME} ${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}
+                    """
+                }
             }
         }
-        
+
         stage('Restart Docker Containers') {
             steps {
                 // Navigate to the application directory and restart containers
                 dir(APP_DIRECTORY) {
-                    sh "docker-compose down"
-                    sh "docker-compose up -d"
+                    sh "docker stop ${env.CONTAINER_NAME}"
+                    sh "docker start ${env.CONTAINER_NAME} "
                 }
             }
-        }
-                    
-        stage('Push Code to Repository') {
-            steps {
-                script {
-                    // Commit and push changes to the repository
-                    sh "git config --global user.email 'touhidjnu@gmail.com'"
-                    sh "git config --global user.name 'touhid'"
-                    sh "git add ${APP_DIRECTORY}/docker-compose.yaml"
-                    sh "git commit -m 'Update docker-compose with new image tag'"
-                    sh "git push origin main" // Adjust the branch name if needed
-                }
-            }
-        }
-    }
-    
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
         }
     }
 }
