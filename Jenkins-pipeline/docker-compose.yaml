@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  touhid-latest-app:
+    image: touhidjnu/react-app:latest
+    ports:
+      - "9097:80"
+    restart: always

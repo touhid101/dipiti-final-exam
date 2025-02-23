@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: touhid-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: touhid-app
+  template:
+    metadata:
+      labels:
+        app: touhid-app
+    spec:
+      containers:
+      - name: touhid-app
+        image: touhidjnu/react-app:latest  # Replace with your actual image
+        ports:
+        - containerPort: 8081
